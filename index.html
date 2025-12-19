@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>祝福明信片</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: "Noto Sans TC", sans-serif;
+      background: #f0f0f0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .card {
+      width: 360px;
+      background: #fff url('https://en.pimg.jp/034/964/498/1/34964498.jpg') center/cover no-repeat;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+      padding: 24px;
+    }
+    h1 {
+      font-size: 20px;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+    label {
+      font-size: 14px;
+      display: block;
+      margin-top: 12px;
+    }
+    input, textarea {
+      width: 100%;
+      margin-top: 6px;
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+    }
+    textarea { resize: none; height: 80px; }
+    button {
+      width: 100%;
+      margin-top: 16px;
+      padding: 10px;
+      border: none;
+      border-radius: 10px;
+      background: #4CAF50;
+      color: #fff;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    button:disabled {
+      background: #999;
+    }
+    .thankyou {
+      display: none;
+      text-align: center;
+    }
+    .quote {
+      margin-top: 12px;
+      font-size: 14px;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+
+<div class="card" id="formCard">
+  <h1><font color=yellow>送出一張祝福明信片</font></h1>
+  <label>你的姓名</label>
+  <input type="text" id="from_name" required />
+
+  <label>收件 Email</label>
+  <input type="email" id="from_email" required />
+
+  <label>祝福語</label>
+  <textarea id="message" required></textarea>
+
+  <button id="sendBtn">寄出祝福</button>
+</div>
+
+<div class="card thankyou" id="thankYouCard">
+  <h1>感謝你的祝福 💌</h1>
+  <div class="quote" id="thankQuote"></div>
+</div>
+
+<script>
+  // ✅ 初始化 EmailJS（請換成你新的 Public Key）
+emailjs.init('RD5JzNiRdqQ63EdjH');
+
+  const quotes = [
+    '你的溫柔，正在某個角落發光。',
+    '願你給出的祝福，也回到你身上。',
+    '一份真心，足以照亮一天。',
+    '你已經比想像中更好了。',
+    '善意，永遠不會迷路。'
+  ];
+
+  function showThankYou() {
+    document.getElementById('formCard').style.display = 'none';
+    document.getElementById('thankYouCard').style.display = 'block';
+    const q = quotes[Math.floor(Math.random() * quotes.length)];
+    document.getElementById('thankQuote').innerText = q;
+  }
+
+  function sendMail() {
+    const btn = document.getElementById('sendBtn');
+    btn.disabled = true;
+
+    const params = {
+      from_name: document.getElementById('from_name').value,
+      from_email: document.getElementById('from_email').value,
+      message: document.getElementById('message').value
+    };
+
+   emailjs.send('service_f3uvd1i', 'template_4mcny7o', params)
+      .then(function(response) {
+        console.log('SUCCESS', response.status, response.text);
+        showThankYou();
+      })
+      .catch(function(error) {
+        console.error('FAILED', error);
+        alert('寄送失敗，請確認 EmailJS 設定');
+        btn.disabled = false;
+      });
+  }
+
+  document.getElementById('sendBtn').addEventListener('click', sendMail);
+</script>
+
+</body>
+</html>
