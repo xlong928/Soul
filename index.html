@@ -1,135 +1,430 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
 <head>
-  <meta charset="UTF-8" />
-  <title>祝福明信片</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
-  <style>
-    body {
-      margin: 0;
-      font-family: "Noto Sans TC", sans-serif;
-      background: #f0f0f0;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-    }
-    .card {
-      width: 360px;
-      background: #fff url('https://en.pimg.jp/034/964/498/1/34964498.jpg') center/cover no-repeat;
-      border-radius: 16px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-      padding: 24px;
-    }
-    h1 {
-      font-size: 20px;
-      margin-bottom: 16px;
-      text-align: center;
-    }
-    label {
-      font-size: 14px;
-      display: block;
-      margin-top: 12px;
-    }
-    input, textarea {
-      width: 100%;
-      margin-top: 6px;
-      padding: 8px;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-      font-size: 14px;
-    }
-    textarea { resize: none; height: 80px; }
-    button {
-      width: 100%;
-      margin-top: 16px;
-      padding: 10px;
-      border: none;
-      border-radius: 10px;
-      background: #4CAF50;
-      color: #fff;
-      font-size: 16px;
-      cursor: pointer;
-    }
-    button:disabled {
-      background: #999;
-    }
-    .thankyou {
-      display: none;
-      text-align: center;
-    }
-    .quote {
-      margin-top: 12px;
-      font-size: 14px;
-      color: #555;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>
+嘿，你今天好嗎？－九色小葫蘆療癒網頁
+</title>
+<style>
+body{
+margin:0;
+font-family:"Microsoft JhengHei";
+background:linear-gradient(
+180deg,
+#d8f3ff,
+#fff7ef);
+
+height:100vh;
+
+overflow:hidden;
+
+text-align:center;
+
+}
+
+
+h1{
+margin-top:30px;
+font-size:38px;
+color:#444;
+}
+
+
+.subtitle{
+color:#777;
+font-size:18px;
+}
+
+
+#gourd{
+width:130px;
+height:170px;
+margin:auto;
+margin-top:30px;
+position:relative;
+
+animation:
+walk 8s infinite alternate ease-in-out,
+jump 2s infinite ease-in-out;
+
+}
+
+
+/* 上圓 */
+
+#gourd::before{
+content:"";
+width:80px;
+height:80px;
+background:inherit;
+position:absolute;
+top:0;
+left:25px;
+border-radius:50%;
+}
+
+
+/* 下圓 */
+
+#gourd::after{
+content:"";
+width:130px;
+height:110px;
+background:inherit;
+position:absolute;
+bottom:0;
+left:0;
+border-radius:60%;
+}
+
+
+.face{
+position:absolute;
+top:75px;
+left:40px;
+z-index:10;
+font-size:35px;
+}
+
+
+@keyframes walk{
+
+0%{
+transform:
+translateX(-80px)
+rotate(-5deg);
+}
+
+100%{
+transform:
+translateX(80px)
+rotate(5deg);
+}
+
+}
+
+
+@keyframes jump{
+0%,100%{
+margin-top:30px;
+}
+
+50%{
+margin-top:10px;
+}
+
+}
+
+
+.card{
+width:80%;
+max-width:600px;
+margin:auto;
+margin-top:30px;
+padding:25px;
+background:white;
+border-radius:25px;
+box-shadow:
+0 10px 30px
+rgba(0,0,0,0.15);
+}
+
+
+.title{
+font-size:28px;
+font-weight:bold;
+margin-bottom:20px;
+}
+
+
+.section{
+margin-top:20px;
+}
+
+
+.label{
+font-size:20px;
+color:#666;
+margin-bottom:10px;
+}
+
+
+.content{
+font-size:22px;
+line-height:1.8;
+color:#333;
+}
+
+
+.small{
+
+font-size:18px;
+
+color:#777;
+
+}
+
+
+</style>
 </head>
 <body>
 
-<div class="card" id="formCard">
-  <h1><font color=yellow>送出一張祝福明信片</font></h1>
-  <label>你的姓名</label>
-  <input type="text" id="from_name" required />
+<h1>
+嘿，你今天好嗎？
+</h1>
 
-  <label>收件 Email</label>
-  <input type="email" id="from_email" required />
-
-  <label>祝福語</label>
-  <textarea id="message" required></textarea>
-
-  <button id="sendBtn">寄出祝福</button>
+<div class="subtitle">
+九色小葫蘆療癒網頁
+<br>
+願每一天，
+都有一隻小葫蘆陪伴你。
 </div>
 
-<div class="card thankyou" id="thankYouCard">
-  <h1>感謝你的祝福 💌</h1>
-  <div class="quote" id="thankQuote"></div>
+
+
+<div id="gourd">
+<div class="face">
+😊
 </div>
+</div>
+
+
+
+
+<div class="card">
+<div class="title">
+今日的小葫蘆
+</div>
+
+
+<div
+id="name"
+class="content">
+</div>
+
+
+
+<div class="section">
+<div class="label">
+🌱 今日療癒語
+</div>
+<div
+id="message"
+class="content">
+</div>
+</div>
+
+
+
+
+<div class="section">
+<div class="label">
+✨ 今日小動作
+</div>
+<div
+id="action"
+class="content">
+</div>
+</div>
+
+
+
+<div class="section">
+<div class="label">
+🌿 今日幸運植物
+</div>
+
+
+<div
+id="plant"
+class="small">
+</div>
+</div>
+
+
+
+
+<div class="section">
+<div class="label">
+💎 今日幸運水晶
+</div>
+
+
+<div
+id="crystal"
+class="small">
+</div>
+</div>
+
+</div>
+
+
+
 
 <script>
-  // ✅ 初始化 EmailJS（請換成你新的 Public Key）
-emailjs.init('RD5JzNiRdqQ63EdjH');
+const gourds=[
+{
 
-  const quotes = [
-    '你的溫柔，正在某個角落發光。',
-    '願你給出的祝福，也回到你身上。',
-    '一份真心，足以照亮一天。',
-    '你已經比想像中更好了。',
-    '善意，永遠不會迷路。'
-  ];
+name:"🔴 力量葫蘆",
+color:"#e74c3c",
+message:"今天的你，比想像中還勇敢。",
+action:"伸展雙手10秒鐘，感受自己的力量。",
+plant:"紅花",
+crystal:"紅瑪瑙"
 
-  function showThankYou() {
-    document.getElementById('formCard').style.display = 'none';
-    document.getElementById('thankYouCard').style.display = 'block';
-    const q = quotes[Math.floor(Math.random() * quotes.length)];
-    document.getElementById('thankQuote').innerText = q;
-  }
+},
 
-  function sendMail() {
-    const btn = document.getElementById('sendBtn');
-    btn.disabled = true;
 
-    const params = {
-      from_name: document.getElementById('from_name').value,
-      from_email: document.getElementById('from_email').value,
-      message: document.getElementById('message').value
-    };
+{
 
-   emailjs.send('service_f3uvd1i', 'template_4mcny7o', params)
-      .then(function(response) {
-        console.log('SUCCESS', response.status, response.text);
-        showThankYou();
-      })
-      .catch(function(error) {
-        console.error('FAILED', error);
-        alert('寄送失敗，請確認 EmailJS 設定');
-        btn.disabled = false;
-      });
-  }
+name:"🟠 活力葫蘆",
+color:"#f39c12",
+message:"保持熱情，生活會回應你的光。",
+action:"原地踏步30秒，喚醒活力。",
+plant:"金盞花",
+crystal:"太陽石"
 
-  document.getElementById('sendBtn').addEventListener('click', sendMail);
+},
+
+
+{
+
+name:"🟡 自信葫蘆",
+color:"#f1c40f",
+message:"相信自己，你已經做得很好。",
+action:"對鏡子微笑3秒鐘。",
+plant:"向日葵",
+crystal:"黃水晶"
+
+},
+
+
+{
+
+name:"🟢 療癒葫蘆",
+color:"#2ecc71",
+message:"慢一點沒有關係，照顧自己最重要。",
+action:"深呼吸三次，感謝今天努力的自己。",
+plant:"柚子葉",
+crystal:"綠幽靈"
+
+},
+
+
+{
+name:"🔵 表達葫蘆",
+color:"#3498db",
+message:"勇敢說出心裡真正的感受。",
+action:"寫下一句現在的心情。",
+plant:"藍雪花",
+crystal:"海藍寶"
+},
+
+
+{
+
+name:"🟣 智慧葫蘆",
+color:"#9b59b6",
+message:"答案，其實已經在你的心裡。",
+action:"閉上眼睛30秒，聆聽內心。",
+plant:"薰衣草",
+crystal:"紫水晶"
+
+},
+
+
+{
+
+name:"⚪ 淨化葫蘆",
+color:"#ecf0f1",
+message:"放下昨日，迎接新的開始。",
+action:"整理桌面5分鐘。",
+plant:"白百合",
+crystal:"白水晶"
+},
+
+
+{
+
+name:"⚫ 守護葫蘆",
+color:"#555",
+message:"你並不孤單，我會陪著你。",
+action:"抱抱自己10秒鐘。",
+plant:"黑松",
+crystal:"黑曜石"
+
+},
+
+
+{
+
+name:"🌈 希望葫蘆",
+color:"linear-gradient(45deg,#ff7675,#fdcb6e,#55efc4,#74b9ff,#a29bfe)",
+message:"願今天，發生一件讓你微笑的小事。",
+action:"抬頭看看天空，給自己一個笑容。",
+plant:"彩虹尤加利",
+crystal:"彩虹螢石"
+}
+
+];
+
+
+
+
+function getTodayData(){
+let today=new Date();
+let seed=
+
+today.getFullYear()
++(today.getMonth()+1)
++today.getDate();
+
+
+return gourds[
+seed%
+gourds.length
+
+];
+
+
+
+}
+
+
+
+const today=getTodayData();
+
+
+
+document.getElementById("name")
+.innerHTML=
+today.name;
+
+
+
+document.getElementById("message")
+.innerHTML=
+
+today.message;
+
+document.getElementById("action")
+.innerHTML=
+today.action;
+
+document.getElementById("plant")
+.innerHTML=
+today.plant;
+
+document.getElementById("crystal")
+.innerHTML=
+today.crystal;
+
+document.getElementById("gourd")
+.style.background=
+today.color;
+
+
+
 </script>
-
 </body>
 </html>
