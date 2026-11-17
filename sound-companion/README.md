@@ -16,7 +16,7 @@ NFC 聲音療癒娃娃的 Web App 原型：領取心伴、養育成長、用實�
 
 1. 到這個 repo 的 **Settings → Pages**。
 2. **Source** 選 **Deploy from a branch**，Branch 選 `main`、資料夾 `/ (root)`，按 **Save**。
-3. 約一分鐘後會出現網址 `https://xlong928.github.io/Soul/xinban/`，用手機打開就能測。
+3. 約一分鐘後會出現網址 `https://xlong928.github.io/Soul/sound-companion/`，用手機打開就能測。
 
 GitHub Pages 是 https，所以可以用手機定位；Android 手機的 Chrome 還能讀真的 NFC 貼紙。
 
