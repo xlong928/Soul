@@ -1609,6 +1609,14 @@ function renderHome(){
         tx.replaceChild(inp,nm); acts.replaceChild(ok,rb); inp.focus(); inp.select(); });
       acts.appendChild(rb); li.appendChild(av); li.appendChild(tx); li.appendChild(acts); ul.appendChild(li); });
     c.appendChild(ul); body.appendChild(c);
+    { const t=hEl('section','hcard panel'); t.appendChild(hEl('h3',null,'測試工具：綁定測試流水號'));
+      t.appendChild(hEl('p','hnote','輸入測試流水號（OWL-01-990001 到 OWL-01-990020），帳號就會多一隻用這個 ID 的心伴，先是一顆蛋。寫著同一個流水號的 NFC 貼紙，孵化後就能感應打卡。'));
+      const lab=hEl('label','cifield'); lab.appendChild(document.createTextNode('測試流水號')); const inp=hEl('input'); inp.id='testSerial'; inp.className='obinput'; inp.placeholder='OWL-01-990001'; inp.autocomplete='off'; inp.spellcheck=false; lab.appendChild(inp); t.appendChild(lab);
+      const go=hEl('button','bigbtn','綁定'); go.type='button'; go.addEventListener('click',()=>{ const v=inp.value.trim().toUpperCase().replace(/\s+/g,'');
+        if(!/^OWL-01-99\d{4}$/.test(v)){ toast('請輸入 OWL-01-99 開頭的測試流水號'); inp.focus(); return; }
+        if(pets.map[v]&&+pets.map[v].reg>0){ toast('這個流水號已經綁定在你的帳號'); return; }
+        claimOwl(v); social.names[v]='測試'+v.slice(-2); pushShared(); pets.current=v; toast('已綁定「測試'+v.slice(-2)+'」，先回小屋摸摸頭讓牠孵化'); renderHome(); });
+      inp.addEventListener('keydown',e=>{ if(e.key==='Enter') go.click(); }); t.appendChild(go); body.appendChild(t); }
     if(NFC.supported){ const t=hEl('section','hcard panel'); t.appendChild(hEl('h3',null,'測試工具：製作 NFC 貼紙'));
       t.appendChild(hEl('p','hnote','把心伴的 ID 寫進空白 NFC 貼紙（NTAG213／215），貼紙就能當成那隻心伴的實體娃娃來感應打卡。'));
       const row=hEl('div','citags'); myOwlIds().forEach(id=>{ const b=hEl('button',null,'寫入「'+owlName(parseOwl(id))+'」'); b.type='button'; b.addEventListener('click',()=>nfcWrite(id)); row.appendChild(b); }); t.appendChild(row); body.appendChild(t); }
@@ -2549,7 +2557,7 @@ function renderOnboard(){
     b.appendChild(btn('去小屋看看','gold',()=>{ ob.state='done'; location.hash='home'; renderOnboard(); })); return; }
 }
 // 領取虛擬心伴：帳號建立心伴（ID、註冊時間、蛋花紋）；實體娃娃之後依這個 ID 訂製，NFC 寫入同一個 ID
-function claimOwl(){ const id='OWL-01-'+String(1+Math.floor(Math.random()*999998)).padStart(6,'0'), now=Date.now();
+function claimOwl(fixed){ const id=fixed||('OWL-01-'+String(1+Math.floor(Math.random()*989998)).padStart(6,'0')), now=Date.now();
   pets.map[id]={egg:Math.floor(Math.random()*8),born:0,reg:now,mood:70,calm:60,at:now};
   try{ localStorage.setItem(PET_KEY,JSON.stringify(pets.map)); }catch(e){}
   if(pets.col) pets.col.doc(id).set(pets.map[id]).catch(()=>toast('註冊沒有存起來，請檢查網路後再試'));
