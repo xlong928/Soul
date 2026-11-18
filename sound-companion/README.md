@@ -6,10 +6,11 @@ NFC 聲音療癒娃娃的 Web App 原型：領取心伴、養育成長、用實�
 
 | 檔案 | 說明 |
 |---|---|
-| `index.html` | App 本體（獨立網址版）。不在 claude.ai 裡打開時會進入「測試模式」，資料存在瀏覽器。 |
+| `index.html` | App 本體（獨立網址版）。不在 claude.ai 裡打開時，用 email 帳號登入雲端資料庫；也可以改用「本機測試模式」。 |
 | `claude-artifact.html` | 同一份程式的 claude.ai Artifact 版（沒有 `<html>` 外框，由 claude.ai 包裝）。 |
 | `home-bgm.mp3` | 首頁背景音樂「Cozy Home Loop」。 |
 | `land50m.json`、`land10m.json` | 足跡星球用的 Natural Earth 陸地資料（50m／10m）。 |
+| `supabase/` | 雲端資料庫（Supabase）的建表 SQL：心伴 ID 登記、撿到心伴通知。 |
 | `.nojekyll` | 讓 GitHub Pages 原樣提供檔案。 |
 
 ## 用 GitHub Pages 開成測試網址
@@ -20,12 +21,29 @@ NFC 聲音療癒娃娃的 Web App 原型：領取心伴、養育成長、用實�
 
 GitHub Pages 是 https，所以可以用手機定位；Android 手機的 Chrome 還能讀真的 NFC 貼紙。
 
+## 雲端帳號（Supabase）
+
+獨立網址版接上 Supabase 專案「Sound Companion DB」：
+
+- **登入**：email＋密碼。註冊時填名字。
+- **領取心伴**：由資料庫依序發號（`OWL-01-000001`、`000002`…），每個 ID 只屬於一個帳號。
+- **孵化、改名**：出生時間和名字存進資料庫，換手機登入也找得回來。
+- **綁定測試流水號**：資料庫保證同一個流水號只能被一個帳號綁定。
+- **NFC 打卡**：感應到的 ID 會問資料庫是不是你的心伴。
+- **通知主人**：別的帳號感應到你的心伴並按「通知主人」，你登入後會在信箱收到位置（不會知道是誰撿到的）。
+- **還存在手機上的資料**：心情、打卡足跡、生活履歷、明信片。
+
+### Supabase 後台設定（測試前做一次）
+
+- **Authentication → Sign In / Providers → Email**：測試期間可以關掉「Confirm email」，註冊後就能直接登入（內建寄信每小時只能寄很少封）。
+- **Authentication → URL Configuration**：Site URL 填 `https://xlong928.github.io/Soul/sound-companion/`，Redirect URLs 也加入同一個網址。
+
 ## 測試須知
 
 - **真的 NFC**：Android + Chrome 89 以上，手機設定要打開 NFC。iPhone 不支援網頁讀 NFC，請用示範按鈕。
 - **NFC 貼紙**：空白 NTAG213／215。在 App「我的心伴」頁最下方「測試工具：製作 NFC 貼紙」寫入心伴 ID（NDEF 文字紀錄，格式 `OWL-SS-NNNNNN`）。
 - **日期相關功能**（長大、節日明信片、年度歷程）：直接改手機日期測試。
-- **資料**：測試網址版的資料只存在那支手機的瀏覽器；朋友、寫信、通知主人等多人功能請用 claude.ai 版測。
+- **資料**：心伴 ID 在雲端資料庫；其他紀錄存在那支手機的瀏覽器。朋友、寫信等多人功能請用 claude.ai 版測。
 
 ## 測試用 NFC 流水號
 

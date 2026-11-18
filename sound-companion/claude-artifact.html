@@ -1073,9 +1073,69 @@ async function startWith(db,user,mode){
     snap.docs.forEach(d=>{ const v=d.data(); if(v) next[d.id]={count:v.count,first:v.first,last:v.last,visits:(v.visits||[]).slice()}; });
     store.items = next; store.mode=mode; saveLocal(); setSync(); refreshAll(); pushShared();
   }, ()=>{ store.col=null; store.mode='local'; setSync(); }); }
+
+/* ---------- 雲端帳號（Supabase）：測試網址版用 email 登入；心伴 ID 由資料庫依序發號，NFC 感應用資料庫比對主人 ---------- */
+const SB_URL='https://yhlhwtxibolunzygdyis.supabase.co', SB_KEY='sb_publishable_ZHMteczO53ipv0mSTmX4bw_Wpi3FTGh';
+const SB_LIB='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.89.0/dist/umd/supabase.js', SB_MODE_KEY='fp-mode';
+const SB={on:false,client:null,uid:null,found:[],signup:false,msg:'',busy:false,f:{email:'',pass:'',name:''},poll:null};
+const sbWantLocal=()=>{ try{ return localStorage.getItem(SB_MODE_KEY)==='local'; }catch(e){ return false; } };
+const sbSetMode=m=>{ try{ localStorage.setItem(SB_MODE_KEY,m); }catch(e){} };
+function sbLoadLib(){ if(window.supabase&&window.supabase.createClient) return Promise.resolve();
+  return new Promise((ok,no)=>{ const s=document.createElement('script'); s.src=SB_LIB; s.onload=ok; s.onerror=no; document.head.appendChild(s); }); }
+function sbErr(e){ const m=String((e&&(e.message||e.error_description))||e||'');
+  if(/Invalid login credentials/i.test(m)) return 'email 或密碼不對';
+  if(/Email not confirmed/i.test(m)) return '這個帳號還沒完成 email 確認，請到信箱點確認連結';
+  if(/already registered|already been registered/i.test(m)) return '這個 email 已經註冊過了，請直接登入';
+  if(/Password should be at least/i.test(m)) return '密碼至少要 6 個字';
+  if(/rate limit|too many/i.test(m)) return '嘗試次數太多，請稍後再試';
+  if(/Failed to fetch|NetworkError|Load failed/i.test(m)) return '連不上網路，請檢查網路後再試';
+  return m||'發生錯誤，請再試一次'; }
+async function sbRpc(fn,args){ const r=await SB.client.rpc(fn,args||{}); if(r.error) throw r.error; return r.data; }
+function sbRowPet(r,prev){ return Object.assign({mood:70,calm:60,at:Date.now()},prev||{},{egg:r.egg_pattern|0,born:r.born_at?Date.parse(r.born_at):0,reg:Date.parse(r.registered_at)}); }
+// 用資料庫裡「我的心伴」更新這台裝置（ID、領取時間、出生時間、蛋花紋、名字以資料庫為準；心情等其他資料留在裝置）
+async function sbSync(){ const r=await SB.client.from('companions').select('id,name,egg_pattern,registered_at,born_at,status').eq('status','active'); if(r.error) throw r.error; const rows=r.data||[];
+  if(pets.col){ rows.forEach(x=>{ const v=sbRowPet(x,pets.map[x.id]); pets.map[x.id]=v; pets.col.doc(x.id).set(v).catch(()=>{}); if(x.name) social.names[x.id]=x.name; }); pushShared(); refreshAll(); return rows; }
+  let all={}; try{ all=JSON.parse(localStorage.getItem(LOCAL_DB_KEY)||'{}')||{}; }catch(e){}
+  const pre='data/users/'+SB.uid+'/nurture/owls/', ids=new Set(rows.map(x=>x.id));
+  Object.keys(all).forEach(k=>{ if(k.startsWith(pre)&&!ids.has(k.slice(pre.length))) delete all[k]; });
+  const sk='shared/'+SB.uid, sh=all[sk]||{}; sh.owls=sh.owls||{};
+  rows.forEach(x=>{ all[pre+x.id]=sbRowPet(x,all[pre+x.id]); if(x.name) sh.owls[x.id]=Object.assign({},sh.owls[x.id],{name:x.name}); });
+  all[sk]=sh; try{ localStorage.setItem(LOCAL_DB_KEY,JSON.stringify(all)); localStorage.removeItem(PET_KEY); }catch(e){}
+  pets.map={}; return rows; }
+async function sbLoadFound(){ if(!SB.client) return;
+  const r=await SB.client.from('found_reports').select('id,companion_id,lat,lon,landmark,reported_at').order('reported_at',{ascending:false}).limit(50); if(r.error) return;
+  SB.found=(r.data||[]).map(x=>{ const t=Date.parse(x.reported_at); return {id:'S'+x.id,kind:'found',owl:x.companion_id,t,arrive:t,lat:x.lat,lon:x.lon,lm:LMBY[x.landmark]?x.landmark:null}; });
+  if(typeof refreshMail==='function') refreshMail(); }
+async function sbInit(){ ob.state='loading'; renderOnboard(); try{ localStorage.removeItem(LOGOUT_KEY); }catch(e){}
+  try{ await sbLoadLib(); SB.client=window.supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}); }
+  catch(e){ SB.client=null; toast('連不上雲端資料庫，先用本機測試模式'); if(localUser()) startLocal(); else { ob.state='local'; renderOnboard(); } return; }
+  let ses=null; try{ const r=await SB.client.auth.getSession(); ses=r.data&&r.data.session; }catch(e){}
+  if(/access_token=|error_description=/.test(location.hash)) history.replaceState(null,'',location.pathname+location.search);
+  if(ses) sbStart(ses.user); else { ob.state='sblogin'; renderOnboard(); } }
+async function sbStart(u){ SB.on=true; SB.uid=u.id; LOCAL_MODE=true; ob.state='loading'; renderOnboard();
+  const name=(u.user_metadata&&u.user_metadata.name)||String(u.email||'').split('@')[0];
+  try{ await sbSync(); }catch(e){ toast('讀不到雲端的心伴資料：'+sbErr(e)); }
+  sbLoadFound(); clearInterval(SB.poll); SB.poll=setInterval(sbLoadFound,120000);
+  startWith(localDB(),{id:async()=>u.id,me:async()=>({name})},'device'); }
+async function sbSubmit(email,pass,name){ email=String(email||'').trim(); pass=String(pass||''); const n=String(name||'').replace(/[\u0000-\u001f<>]/g,'').trim().slice(0,20);
+  SB.f={email,pass,name:n};
+  if(SB.signup&&!n){ SB.msg='先輸入你的名字'; renderOnboard(); return; }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ SB.msg='請輸入正確的 email'; renderOnboard(); return; }
+  if(pass.length<6){ SB.msg='密碼至少要 6 個字'; renderOnboard(); return; }
+  SB.busy=true; SB.msg=''; renderOnboard();
+  try{ const a=SB.client.auth;
+    const r=SB.signup? await a.signUp({email,password:pass,options:{data:{name:n},emailRedirectTo:location.origin+location.pathname}}) : await a.signInWithPassword({email,password:pass});
+    if(r.error) throw r.error; SB.busy=false;
+    if(!r.data.session){ SB.signup=false; SB.f.pass=''; SB.msg='註冊好了！請到 '+email+' 的信箱點確認連結，再回來登入。'; renderOnboard(); return; }
+    SB.f.pass=''; SB.msg=''; sbStart(r.data.session.user);
+  }catch(e){ SB.busy=false; SB.msg=sbErr(e); renderOnboard(); } }
+// 領取：雲端帳號向資料庫要一個新的流水號（fixed＝綁定測試流水號）；本機模式照舊在裝置上產生
+function claimAny(fixed){ if(!SB.on) return Promise.resolve(claimOwl(fixed));
+  return sbRpc(fixed?'bind_test_companion':'claim_companion',fixed?{p_id:fixed}:{}).then(r=>{ const v=sbRowPet(r); pets.map[r.id]=v;
+    if(pets.col) pets.col.doc(r.id).set(v).catch(()=>{}); pushShared(); return r.id; }); }
 async function initCloud(){
   const c = window.claude;
-  if(!c || !c.use){ setSync(); if(localUser()) startLocal(); else { ob.state='local'; renderOnboard(); } return; }
+  if(!c || !c.use){ setSync(); if(!sbWantLocal()){ sbInit(); return; } if(localUser()) startLocal(); else { ob.state='local'; renderOnboard(); } return; }
   try{
     const [db,user] = await Promise.all([c.use('db'), c.use('user')]);
     const uid = user ? await user.id() : null;
@@ -1084,7 +1144,7 @@ async function initCloud(){
   }catch(e){ setSync(); obNoAccount(); }
 }
 function setSync(){
-  const m = store.mode==='cloud' ? '顯示這個帳號在心伴的打卡紀錄。' : store.mode==='device' ? '測試模式：顯示這台裝置上的打卡紀錄。' : '目前讀不到帳號，先顯示這台裝置上的紀錄。';
+  const m = SB.on ? '已登入雲端帳號：心伴 ID 存在資料庫，打卡紀錄先存在這台裝置。' : store.mode==='cloud' ? '顯示這個帳號在心伴的打卡紀錄。' : store.mode==='device' ? '測試模式：顯示這台裝置上的打卡紀錄。' : '目前讀不到帳號，先顯示這台裝置上的紀錄。';
   $('syncNote').textContent = isSample() ? '這個帳號還沒有打卡紀錄，地圖上的金色足跡是示範資料。' : m;
 }
 // 一筆足跡 = {t, lat, lon, acc, src: 'gps'|'sim', tag: NFC 標籤代號, lm: 地標代號或 null}
@@ -1093,7 +1153,7 @@ const vis = v => typeof v==='number' ? {t:v} : v;
 const SAMPLE=(function(){ const now=Date.now(), D=864e5, out={};
   [['taipei','taipei101',0]].forEach(r=>{
     const l=LMBY[r[1]], t=now-r[2]*D-((r[2]*7919)%600)*6e4, rnd=mulberryS(r[2]);
-    const v={t,lat:+(l.lat+(rnd()-.5)*.001).toFixed(5),lon:+(l.lon+(rnd()-.5)*.001).toFixed(5),acc:8,src:'gps',owl:'OWL-01-000001',lm:l.id};
+    const v={t,lat:+(l.lat+(rnd()-.5)*.001).toFixed(5),lon:+(l.lon+(rnd()-.5)*.001).toFixed(5),acc:8,src:'gps',owl:'OWL-01-999999',lm:l.id};
     const p=out[r[0]]||{count:0,first:t,last:0,visits:[]}; p.count++; p.first=Math.min(p.first,t); p.last=Math.max(p.last,t); p.visits.push(v); p.visits.sort((a,b)=>a.t-b.t); out[r[0]]=p; });
   return out; })();
 function mulberryS(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
@@ -1160,7 +1220,7 @@ function befriend(p){
   toast(relOf(p)==='friend' ? '你和 '+nm+' 成為朋友了' : '已送出邀請給 '+nm);
   refreshAll(); pushShared();
 }
-function renameOwl(id,name){ const n=cleanName(name); if(!n) return; social.names[id]=n; refreshAll(); pushShared(); toast('已改名為 '+n); }
+function renameOwl(id,name){ const n=cleanName(name); if(!n) return; social.names[id]=n; if(SB.on) sbRpc('rename_companion',{p_id:id,p_name:n}).catch(e=>toast('名字沒有存到雲端：'+sbErr(e))); refreshAll(); pushShared(); toast('已改名為 '+n); }
 // 打卡點：彼此 1 公里內的打卡算同一個點（以該點第一次打卡的位置為中心）
 const SAME_POINT_KM=1;
 let CL=null;
@@ -1368,7 +1428,7 @@ function notices(){ const mine=new Set(myOwlIds()), out=[], now=Date.now();
   Object.keys(mail.docs).forEach(uid=>{ if(uid===mail.uid) return; const d=mail.docs[uid];
     (Array.isArray(d.found)?d.found:[]).forEach(F=>{ if(F&&mine.has(F.owl)&&typeof F.lat==='number'&&typeof F.lon==='number'&&typeof F.t==='number'&&F.t<=now+6e4)
       out.push({id:String(F.id||'').slice(0,40),kind:'found',owl:F.owl,t:F.t,arrive:F.t,lat:F.lat,lon:F.lon,lm:LMBY[F.lm]?F.lm:null}); }); });
-  return out.concat(demoFound()); }
+  return out.concat(demoFound(),SB.found.filter(F=>mine.has(F.owl))); }
 function mailItems(){ return inbox().concat(notices(),typeof recapItems==='function'?recapItems():[]).sort((a,b)=>b.arrive-a.arrive); }
 function reportFound(owl,v){ const recent=mail.found.concat(demoMail.found).some(F=>F.owl===owl&&v.t-F.t<6*HOUR);
   if(recent) return true; const F={id:'F'+v.t.toString(36)+Math.random().toString(36).slice(2,6),owl,t:v.t,lat:v.lat,lon:v.lon,lm:v.lm||null};
@@ -1594,7 +1654,7 @@ function renderHome(){
     if(!ids.length){ c.appendChild(hEl('p','hnote','還沒有心伴。')); body.appendChild(c); return; }
     c.appendChild(hEl('h3',null,'名字可以自己取；屬性會隨著長大慢慢揭曉。'));
     c.appendChild(hEl('p','hrule','實體娃娃依心伴的 ID 訂製。孵化成幼年後，用同一個 ID 的娃娃感應才能打卡；好幾隻可以一起感應、一起打卡。'));
-    const more=hEl('button','ghost','示範：再領一隻心伴（測試多隻一起打卡）'); more.type='button'; more.addEventListener('click',()=>{ const id=claimOwl(); const DEMO_NAMES=['阿福','圓圓','豆豆','咪咪','小米']; social.names[id]=DEMO_NAMES[(myOwlIds().length-2)%DEMO_NAMES.length]; pushShared(); toast('領到了新的心伴「'+social.names[id]+'」，先回小屋摸摸頭讓牠孵化'); pets.current=id; renderHome(); }); c.appendChild(more);
+    if(!SB.on){ const more=hEl('button','ghost','示範：再領一隻心伴（測試多隻一起打卡）'); more.type='button'; more.addEventListener('click',()=>{ const id=claimOwl(); const DEMO_NAMES=['阿福','圓圓','豆豆','咪咪','小米']; social.names[id]=DEMO_NAMES[(myOwlIds().length-2)%DEMO_NAMES.length]; pushShared(); toast('領到了新的心伴「'+social.names[id]+'」，先回小屋摸摸頭讓牠孵化'); pets.current=id; renderHome(); }); c.appendChild(more); }
     const ul=hEl('ul','hlist'); const mv=myVisits();
     ids.forEach((id,i)=>{ const ow=parseOwl(id), n=mv.filter(v=>(owlOfVisit(v)||{}).id===id).length, li=hEl('li','hrow');
       const av=hEl('span','av'); av.innerHTML=petSVG(id,56);
@@ -1615,7 +1675,7 @@ function renderHome(){
       const go=hEl('button','bigbtn','綁定'); go.type='button'; go.addEventListener('click',()=>{ const v=inp.value.trim().toUpperCase().replace(/\s+/g,'');
         if(!/^OWL-01-99\d{4}$/.test(v)){ toast('請輸入 OWL-01-99 開頭的測試流水號'); inp.focus(); return; }
         if(pets.map[v]&&+pets.map[v].reg>0){ toast('這個流水號已經綁定在你的帳號'); return; }
-        claimOwl(v); social.names[v]='測試'+v.slice(-2); pushShared(); pets.current=v; toast('已綁定「測試'+v.slice(-2)+'」，先回小屋摸摸頭讓牠孵化'); renderHome(); });
+        go.disabled=true; claimAny(v).then(()=>{ renameOwl(v,'測試'+v.slice(-2)); pets.current=v; toast('已綁定「測試'+v.slice(-2)+'」，先回小屋摸摸頭讓牠孵化'); renderHome(); }).catch(e=>{ go.disabled=false; toast('綁定失敗：'+sbErr(e)); }); });
       inp.addEventListener('keydown',e=>{ if(e.key==='Enter') go.click(); }); t.appendChild(go); body.appendChild(t); }
     if(NFC.supported){ const t=hEl('section','hcard panel'); t.appendChild(hEl('h3',null,'測試工具：製作 NFC 貼紙'));
       t.appendChild(hEl('p','hnote','把心伴的 ID 寫進空白 NFC 貼紙（NTAG213／215），貼紙就能當成那隻心伴的實體娃娃來感應打卡。'));
@@ -1689,6 +1749,7 @@ let reactT=null;
 function petIt(){ const id=pets.current; if(!id) return; const btn=$('petBtn'), wrap=$('petWrap'), r0=petNow(id);
   showHands(r0.stage==='egg'?'baby':r0.stage); if(r0.stage==='egg') sfx.hatch(); else sfx.pet();
   if(r0.stage==='egg'){ const r=petNow(id); r.mood=Math.min(100,r.mood+10); petSave(id,r,{born:Date.now()}); pushShared();
+    if(SB.on) sbRpc('hatch_companion',{p_id:id}).then(x=>{ const b=x&&x.born_at?Date.parse(x.born_at):0; if(b&&Math.abs(b-(+(pets.map[id]||{}).born||0))>1000) petSave(id,petNow(id),{born:b}); }).catch(e=>toast('出生時間沒有存到雲端：'+sbErr(e)));
     btn.innerHTML=petSVG(id,180,'happy'); btn.classList.remove('squish'); void btn.offsetWidth; btn.classList.add('squish'); heartsAt(wrap);
     $('petBubble').textContent='破殼了！今天是我的生日'; toast('孵化了！出生時間 '+fmtDT(Date.now())); setTimeout(renderHome,1600); return; }
   applyCare(id,r=>{ r.mood=Math.min(100,r.mood+6); }); logLife('pet');
@@ -2302,7 +2363,9 @@ function renderCi(){
     const h=hEl('h2',null,'這不是你的心伴'); h.id='ciTitle'; p.appendChild(h);
     p.appendChild(hEl('p',null,'這隻心伴娃娃的 ID 不是你帳號裡的心伴，所以不能一起打卡。'));
     p.appendChild(hEl('p',null,'是其他人遺失的嗎？可以通知牠的主人，主人會在信箱收到這隻心伴現在的位置。你的名字和帳號不會給對方。'));
-    const row=hEl('div','cbtns'); const yes=btn('通知主人','gold',()=>{ reportFound(ci.other,ci.v); ci.state='notified'; sfx.pop(); renderCi(); }); row.appendChild(btn('不用了','',()=>{ ci.state='nfc'; renderCi(); })); row.appendChild(yes); p.appendChild(row);
+    const row=hEl('div','cbtns'); const yes=btn('通知主人','gold',()=>{ if(!SB.on){ reportFound(ci.other,ci.v); ci.state='notified'; sfx.pop(); renderCi(); return; }
+      yes.disabled=true; sbRpc('report_found',{p_id:ci.other,p_lat:ci.v.lat,p_lon:ci.v.lon,p_landmark:ci.v.lm||null}).then(ok=>{ if(ci.state!=='notmine') return;
+        if(!ok){ yes.disabled=false; toast('這隻心伴還沒有主人，沒有人可以通知'); return; } ci.state='notified'; sfx.pop(); renderCi(); }).catch(e=>{ yes.disabled=false; toast('通知沒有送出：'+sbErr(e)); }); }); row.appendChild(btn('不用了','',()=>{ ci.state='nfc'; renderCi(); })); row.appendChild(yes); p.appendChild(row);
     host.appendChild(p); setTimeout(()=>yes.focus(),0); return; }
   if(ci.state==='holiday'){ const c=ci.hc, h=HOL.BY_K[c.h]; host.className='done hol'; host.style.setProperty('--ciTop',h.bg[0]); host.style.setProperty('--ciBot',h.bg[1]); host.style.setProperty('--ciGround',h.bg[1]);
     const wrap=hEl('div','cidone'); const st=hEl('h2','cistamp'); st.id='ciTitle'; st.innerHTML=LI.gift; st.appendChild(document.createTextNode('節日明信片來了！')); wrap.appendChild(st);
@@ -2358,12 +2421,15 @@ function saveVisit(v,batch){
   if(!batch){ setSync(); refreshAll(); pushShared(); } }
 // 感應一隻：帳號的心伴 → 加進「這次感應到的心伴」；不是 → 問要不要通知主人
 function ciScan(tag){ if(ci.reading) return; ci.reading=tag; renderCi();
-  clearTimeout(ci.timer); ci.timer=setTimeout(()=>{ ci.reading=null;
+  // 雲端帳號：裝置上沒有這隻時，問資料庫是不是我的（可能是剛在別台裝置領的）
+  const look=SB.on&&!myOwlIds().includes(tag)?sbRpc('check_companion',{p_id:tag}).then(st=>st==='mine'?sbSync().then(()=>st):st).catch(()=>'error'):Promise.resolve(null);
+  clearTimeout(ci.timer); Promise.all([look,new Promise(r=>{ ci.timer=setTimeout(r,900); })]).then(([st])=>{ if(ci.state!=='nfc'||ci.reading!==tag) return; ci.reading=null;
+    if(st==='error'){ toast('連不上資料庫，沒辦法確認這隻心伴，請再感應一次'); renderCi(); return; }
     if(!myOwlIds().includes(tag)){ ci.other=tag; ci.v=makeVisit(tag); ci.state='notmine'; sfx.draw(); renderCi(); return; }
     if(ci.scanned.includes(tag)){ toast(owlName(parseOwl(tag))+' 已經感應過了'); renderCi(); return; }
     if(O26.stageOf(myInfo(tag))==='egg'){ toast(owlName(parseOwl(tag))+' 還是蛋，孵化成幼年後才能打卡'); renderCi(); return; }
     ci.scanned.push(tag); sfx.pop(); renderCi();
-  },900); }
+  }); }
 // 按「打卡」：幼年以上的每一隻都記一筆（同一時間、同一位置），再播蓋章動畫
 function ciCheckin(){ const ok=ci.scanned.filter(id=>myOwlIds().includes(id)&&O26.stageOf(myInfo(id))!=='egg'); if(!ok.length) return;
   const base=makeVisit(ok[0]), vs=ok.map(id=>Object.assign({},base,{owl:id,tag:id}));
@@ -2508,7 +2574,7 @@ const ob={state:'loading',user:null,name:'',petsReady:false,timer:null,picked:nu
 const LOGOUT_KEY='fp-loggedout';
 const isLoggedOut=()=>{ try{ return localStorage.getItem(LOGOUT_KEY)==='1'; }catch(e){ return false; } };
 function askLogout(){ closeDrawer(); ci.back=document.activeElement; ci.state='logout'; renderCi(); }
-function doLogout(){ try{ localStorage.setItem(LOGOUT_KEY,'1'); }catch(e){}
+function doLogout(){ if(SB.on){ clearInterval(SB.poll); SB.client.auth.signOut().catch(()=>{}).then(()=>location.reload()); return; } try{ localStorage.setItem(LOGOUT_KEY,'1'); }catch(e){}
   if(!$('careSheet').hidden) closeCare(); closeMail(); closeCi(true); ob.state='loggedout'; renderOnboard(); if(typeof updateBgm==='function') updateBgm(); }
 $('logoutBtn').addEventListener('click',askLogout);
 function doLogin(){ try{ localStorage.removeItem(LOGOUT_KEY); }catch(e){} ob.state=ob.user?'confirm':'noaccount'; renderOnboard(); }
@@ -2523,7 +2589,7 @@ function renderOnboard(){
   const host=$('onboard'); if(ob.state==='done'&&isLoggedOut()) ob.state='loggedout';
   if(ob.state==='done'){ host.hidden=true; if(typeof renderHome==='function') applyView(); if(typeof updateBgm==='function') setTimeout(updateBgm,0); return; }
   host.hidden=false; const b=$('obBody'); b.textContent='';
-  if(isLoggedOut()&&ob.state!=='noaccount'&&ob.state!=='local') ob.state='loggedout';
+  if(isLoggedOut()&&ob.state!=='noaccount'&&ob.state!=='local'&&ob.state!=='sblogin') ob.state='loggedout';
   const wm=()=>{ const w=hEl('div','obwm'); w.appendChild(hEl('b',null,'心伴')); w.appendChild(hEl('small',null,'SOUND COMPANION')); return w; };
   const btn=(t,cls,f)=>{ const x=hEl('button','bigbtn'+(cls?' '+cls:''),t); x.type='button'; x.style.width='100%'; x.addEventListener('click',f); return x; };
   if(ob.state==='loading'){ b.appendChild(wm()); b.appendChild(hEl('p','obmuted','正在確認你的帳號…')); return; }
@@ -2532,7 +2598,21 @@ function renderOnboard(){
     const lab=hEl('label','cifield'); lab.appendChild(document.createTextNode('你的名字')); const inp=hEl('input'); inp.id='localName'; inp.maxLength=20; inp.autocomplete='nickname'; inp.className='obinput'; lab.appendChild(inp); b.appendChild(lab);
     const go=btn('開始','',()=>{ const n=inp.value.replace(/[\u0000-\u001f<>]/g,'').trim().slice(0,20); if(!n){ inp.focus(); toast('先輸入名字'); return; }
       try{ localStorage.setItem(LOCAL_USER_KEY,JSON.stringify({id:'local_'+Date.now().toString(36)+Math.random().toString(36).slice(2,8),name:n})); }catch(e){} startLocal(); });
-    inp.addEventListener('keydown',e=>{ if(e.key==='Enter') go.click(); }); b.appendChild(go); setTimeout(()=>inp.focus(),0); return; }
+    inp.addEventListener('keydown',e=>{ if(e.key==='Enter') go.click(); }); b.appendChild(go);
+    const cl=hEl('button','ghost','改用 email 帳號登入（連雲端資料庫）'); cl.type='button'; cl.addEventListener('click',()=>{ sbSetMode('cloud'); sbInit(); }); b.appendChild(cl); setTimeout(()=>inp.focus(),0); return; }
+  if(ob.state==='sblogin'){ b.appendChild(wm()); b.appendChild(hEl('h1',null,SB.signup?'註冊心伴帳號':'登入心伴帳號'));
+    b.appendChild(hEl('p','obmuted',SB.signup?'用 email 建立帳號。你的心伴 ID 會存在雲端資料庫，換手機也找得回來。':'用 email 和密碼登入。你的心伴 ID 存在雲端資料庫。'));
+    const field=(label,id,type,ac,val)=>{ const lab=hEl('label','cifield'); lab.appendChild(document.createTextNode(label)); const i=hEl('input'); i.id=id; i.type=type; i.className='obinput'; i.autocomplete=ac; i.value=val||''; lab.appendChild(i); b.appendChild(lab); return i; };
+    const nm=SB.signup?field('你的名字','sbName','text','nickname',SB.f.name):null; if(nm) nm.maxLength=20;
+    const em=field('Email','sbEmail','email','email',SB.f.email); em.spellcheck=false; em.setAttribute('autocapitalize','off');
+    const pw=field('密碼（至少 6 個字）','sbPass','password',SB.signup?'new-password':'current-password',SB.f.pass);
+    if(SB.msg){ const m=hEl('p','obmuted',SB.msg); m.id='sbMsg'; m.setAttribute('role','alert'); m.style.color='var(--ink)'; m.style.fontWeight='700'; b.appendChild(m); }
+    const go=btn(SB.busy?'請稍候…':(SB.signup?'註冊':'登入'),'',()=>sbSubmit(em.value,pw.value,nm&&nm.value)); go.id='sbGo'; go.disabled=SB.busy; b.appendChild(go);
+    [nm,em,pw].forEach(i=>i&&i.addEventListener('keydown',e=>{ if(e.key==='Enter') go.click(); }));
+    const keep=()=>{ SB.f={email:em.value,pass:pw.value,name:nm?nm.value:SB.f.name}; };
+    const sw=hEl('button','ghost',SB.signup?'已經有帳號了？登入':'還沒有帳號？註冊'); sw.type='button'; sw.id='sbSwitch'; sw.addEventListener('click',()=>{ keep(); SB.signup=!SB.signup; SB.msg=''; renderOnboard(); }); b.appendChild(sw);
+    const lo=hEl('button','ghost','改用本機測試模式（不連資料庫）'); lo.type='button'; lo.addEventListener('click',()=>{ sbSetMode('local'); if(localUser()) startLocal(); else { ob.state='local'; renderOnboard(); } }); b.appendChild(lo);
+    if(!SB.busy) setTimeout(()=>{ const f=[nm,em,pw].find(i=>i&&!i.value)||go; f.focus(); },0); return; }
   if(ob.state==='loggedout'){ b.appendChild(wm()); b.appendChild(hEl('h1',null,'你已經登出'));
     b.appendChild(hEl('p','obmuted','你的心伴和所有紀錄都還在帳號裡，重新登入就能繼續。'));
     const lb=btn('登入','',doLogin); b.appendChild(lb); setTimeout(()=>lb.focus(),0); return; }
@@ -2563,13 +2643,13 @@ function claimOwl(fixed){ const id=fixed||('OWL-01-'+String(1+Math.floor(Math.ra
   if(pets.col) pets.col.doc(id).set(pets.map[id]).catch(()=>toast('註冊沒有存起來，請檢查網路後再試'));
   pushShared(); return id; }
 function obClaim(){ ob.state='claiming'; renderOnboard();
-  setTimeout(()=>{
-    const id='OWL-01-'+String(1+Math.floor(Math.random()*999998)).padStart(6,'0'), now=Date.now();
+  const wait=new Promise(r=>setTimeout(r,900));
+  const make=SB.on?claimAny():wait.then(()=>{ const id='OWL-01-'+String(1+Math.floor(Math.random()*989998)).padStart(6,'0'), now=Date.now();
     pets.map[id]={egg:Math.floor(Math.random()*8),born:0,reg:now,mood:70,calm:60,at:now};
     try{ localStorage.setItem(PET_KEY,JSON.stringify(pets.map)); }catch(e){}
-    if(pets.col) pets.col.doc(id).set(pets.map[id]).catch(()=>toast('註冊沒有存起來，請檢查網路後再試'));
-    pets.current=id; ob.picked=id; sfx.hatch&&sfx.pop(); ob.state='result'; renderOnboard(); refreshAll(); pushShared();
-  },900); }
+    if(pets.col) pets.col.doc(id).set(pets.map[id]).catch(()=>toast('註冊沒有存起來，請檢查網路後再試')); return id; });
+  Promise.all([make,wait]).then(([id])=>{ pets.current=id; ob.picked=id; sfx.hatch&&sfx.pop(); ob.state='result'; renderOnboard(); refreshAll(); pushShared(); })
+    .catch(e=>{ toast('領取失敗：'+sbErr(e)); ob.state='options'; renderOnboard(); }); }
 
 /* ---------- 首頁背景音樂：只在首頁循環播放；聽聲音、離開首頁、切到別的 App 時淡出 ---------- */
 const bgm={el:null,on:(()=>{ try{ return localStorage.getItem('fp-bgm')!=='off'; }catch(e){ return true; } })(),unlocked:false,fade:null,vol:0.35};
